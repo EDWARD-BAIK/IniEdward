@@ -234,7 +234,7 @@
     <div id="info-card">
       <div id="time-display">00:00:00</div>
       <div id="phase-tag">MEMUAT...</div>
-      <div id="location-display">📍 Mengambil lokasi...</div>
+      <div id="location-display">📍 Mengambil GPS...</div>
       <div id="weather-status">Mengambil cuaca...</div>
     </div>
 
@@ -550,20 +550,20 @@
     }
     renderRain();
 
-    
-    async function getWeatherAndLocation(lat, lon, cityName = null, countryName = null) {
+ 
+    async function getWeatherAndLocation(lat, lon) {
       const locationEl = document.getElementById('location-display');
       const statusEl = document.getElementById('weather-status');
 
       try {
-        if (!cityName) {
-          const geoRes = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=id`);
-          const geoData = await geoRes.json();
-          cityName = geoData.city || geoData.locality || geoData.principalSubdivision || "Lokasi Anda";
-          countryName = geoData.countryName || "";
-        }
+        const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=12&addressdetails=1`);
+        const geoData = await geoRes.json();
+        const addr = geoData.address || {};
         
-        locationEl.innerText = `📍 ${cityName}${countryName ? ', ' + countryName : ''}`;
+        const cityName = addr.city || addr.town || addr.county || addr.municipality || addr.village || "Lokasi Anda";
+        const stateName = addr.state ? `, ${addr.state}` : '';
+        
+        locationEl.innerText = `📍 ${cityName}${stateName}`;
 
         const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
         const weatherData = await weatherRes.json();
@@ -580,46 +580,32 @@
           statusEl.innerText = `Cuaca: Cerah / Berawan 🌤️ | ${temp}°C`;
         }
       } catch (err) {
-        if (locationEl.innerText === "📍 Mengambil lokasi...") {
-          locationEl.innerText = "📍 Gagal Memuat Lokasi";
-        }
-        statusEl.innerText = "Cuaca: Gagal memuat data";
-      }
-    }
-
-    async function fetchByIP() {
-      const locationEl = document.getElementById('location-display');
-      const statusEl = document.getElementById('weather-status');
-      try {
-        const res = await fetch('https://ipapi.co/json/');
-        const data = await res.json();
-        if (data.latitude && data.longitude) {
-          getWeatherAndLocation(data.latitude, data.longitude, data.city, data.country_name);
-        } else {
-          throw new Error("IP Lookup Gagal");
-        }
-      } catch (e) {
-        locationEl.innerText = "📍 Lokasi Tidak Ditemukan";
-        statusEl.innerText = "Cuaca: Tidak dapat memuat";
+        locationEl.innerText = "📍 Gagal Memuat Lokasi";
+        statusEl.innerText = "Cuaca: Tidak dapat memuat data";
       }
     }
 
     function initWeather() {
+      const locationEl = document.getElementById('location-display');
+      
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
-          (pos) => getWeatherAndLocation(pos.coords.latitude, pos.coords.longitude),
-          () => fetchByIP(),
-          { timeout: 5000, enableHighAccuracy: true }
+          (pos) => {
+            getWeatherAndLocation(pos.coords.latitude, pos.coords.longitude);
+          },
+          (err) => {
+            locationEl.innerText = "📍 Akses GPS Ditolak / Nonaktif";
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
       } else {
-        fetchByIP();
+        locationEl.innerText = "📍 Geolocation Tidak Didukung Browser";
       }
     }
 
     initWeather();
-    setInterval(initWeather, 300000);
 
-  
+    
     const gCanvas = document.getElementById('game-canvas');
     const gCtx = gCanvas.getContext('2d');
     const grid = 15;
